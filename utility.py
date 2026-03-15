@@ -78,6 +78,12 @@ def quaternion_to_yaw(quat: list, offset=0.0):
         yaw_list.append(((yaw + offset) + np.pi) % (2 * np.pi) - np.pi)
     return yaw_list
 
+def colorize_depth(depth_map):
+    norm_dep = depth_map / 10.0 #diubah terjauh 1, terdekat 0 karena dari ros2 message, max 9.99999, min 0.3
+    norm_dep = -1*norm_dep + 1 #dibalik terjauh 0, terdekat 1
+    visdep = np.repeat(norm_dep[:, :, np.newaxis], 3, axis=2) * 255 #normalisasi ke 0 - 255
+    return visdep
+
 def resizecrop_matrix(image, WH_resized=[256, 128], D3=True, crop_HW=[128, 256]):
 
     #resize image
