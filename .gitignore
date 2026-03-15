@@ -2,3 +2,4 @@ dataset_processing
 lightning_logs
 .vscode
 __pycache__
+temp
