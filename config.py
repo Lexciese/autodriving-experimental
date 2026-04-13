@@ -20,7 +20,8 @@ class GlobalConfig:
     logdir = logdir+"_seq"+str(seq_len) # update direktori name
 
 
-    root_dir = '/media/mf/AUTODRIVING-4TB/UGM Baru/autoriving-oskarnatan/datasetx/2026-02-09_route00'
+    # root_dir = '/media/mf/AUTODRIVING-4TB/ringroad/datasetx/2026-02-26_route00'
+    root_dir = '/media/mf/AUTODRIVING-4TB/ringroad/datasetx/2026-02-26_route00'
     train_sequences = ["sequence01", "sequence02"]
     val_sequences = ["sequence03"]
     test_sequences = ["sequence04"]
