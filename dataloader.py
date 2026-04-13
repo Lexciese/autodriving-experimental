@@ -89,21 +89,40 @@ class KarrDataset(Dataset):
             local_ys.append(meta_current["local_position_xyz"][1])
             local_quaternion = meta_current["local_orientation_xyzw"]
             local_headings.append(euler_from_quaternion(local_quaternion[3], local_quaternion[0], local_quaternion[1], local_quaternion[2], rad=True)[2])
-            self.lat.append(meta_current["global_position_latlon"][0])
-            self.lon.append(meta_current["global_position_latlon"][1])
-
-            # TODO: add bearing biasing or MAF later
-            self.bearing.append(0.0)
-
+            curr_lat = meta_current["global_position_latlon"][0]
+            curr_lon = meta_current["global_position_latlon"][1]
+            self.lat.append(curr_lat)
+            self.lon.append(curr_lon)
             self.velocity.append(np.abs(meta_current["velocity"]))
+
+            if np.abs(meta_current["velocity"]) > 0.5:
+                bearing_latlon = latlon_to_yaw(
+                    curr_lat, curr_lon, prev_lat, prev_lon,
+                    offset=0.0
+                    )
+                self.bearing.append(bearing_latlon)
+            else:
+                _, _, bearing_witmotion = euler_from_quaternion(
+                    w=meta_current['global_orientation_xyzw'][3],
+                    x=meta_current['global_orientation_xyzw'][0],
+                    y=meta_current['global_orientation_xyzw'][1],
+                    z=meta_current['global_orientation_xyzw'][2],
+                    rad=True
+                    )
+                bearing_witmotion = np.degrees(bearing_witmotion) - 90
+                bearing_witmotion = np.radians(bearing_witmotion)
+                self.bearing.append(bearing_witmotion)
+            
+            prev_lat, prev_lon = curr_lat, curr_lon
 
             # assign next route lat lon (rp1, rp2)
             about_to_finish = False
+
             for j in range(2):
-                next_lat = rp_list["route_point"]["latitude"][j]
-                next_lon = rp_list["route_point"]["longitude"][j]
-                dLat_m = (next_lat - meta_current["global_position_latlon"][0]) * 40008000 / 360
-                dLon_m = (next_lon - meta_current['global_position_latlon'][1]) * 40075000 * np.cos(np.radians(meta_current['global_position_latlon'][0])) / 360
+                next_lat_rp = rp_list["route_point"]["latitude"][j]
+                next_lon_rp = rp_list["route_point"]["longitude"][j]
+                dLat_m = (next_lat_rp - meta_current["global_position_latlon"][0]) * 40008000 / 360
+                dLon_m = (next_lon_rp - meta_current['global_position_latlon'][1]) * 40075000 * np.cos(np.radians(meta_current['global_position_latlon'][0])) / 360
                 if j == 0 and np.sqrt(dLat_m**2 + dLon_m**2) <= self.rp1_close and not about_to_finish:
                     if len(rp_list['route_point']['latitude']) > 2:
                         rp_list['route_point']['latitude'].pop(0)
@@ -112,16 +131,14 @@ class KarrDataset(Dataset):
                         about_to_finish = True
                         rp_list['route_point']['latitude'][0] = rp_list['route_point']['latitude'][-1]
                         rp_list['route_point']['longitude'][0] = rp_list['route_point']['longitude'][-1]
-
-                    next_lat = rp_list['route_point']['latitude'][j]
-                    next_lon = rp_list['route_point']['longitude'][j]
-                
+                    next_lat_rp = rp_list['route_point']['latitude'][j]
+                    next_lon_rp = rp_list['route_point']['longitude'][j]
                 if j == 0:
-                    self.rp1_lon.append(next_lon)
-                    self.rp1_lat.append(next_lat)
+                    self.rp1_lon.append(next_lon_rp)
+                    self.rp1_lat.append(next_lat_rp)
                 else:
-                    self.rp2_lon.append(next_lon)
-                    self.rp2_lat.append(next_lat)
+                    self.rp2_lon.append(next_lon_rp)
+                    self.rp2_lat.append(next_lat_rp)
 
             # read files sequentially (future frames for waypoints)
             for j in range(1, self.pred_len + 1):
@@ -211,9 +228,10 @@ if __name__ == "__main__":
     dataloader = DataLoader(dataset, batch_size=10, shuffle=False, num_workers=4, drop_last=False)
     iterator = iter(dataloader)
     first_step = next(iter(iterator))
+    print(first_step)
 
-    for batch in dataloader:
-        print(batch)
+    # for batch in dataloader:
+    #     print(batch)
 
             
 
