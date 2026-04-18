@@ -1,6 +1,5 @@
 import os
 import torch
-import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader, random_split
 import cv2
 from pathlib import Path
@@ -13,13 +12,14 @@ from config import GlobalConfig
 config = GlobalConfig()
 
 class KarrDataset(Dataset):
-    def __init__(self):
+    def __init__(self, split='train'):
         self.config = config
         self.seq_len = self.config.seq_len
         self.pred_len = self.config.pred_len
         self.data_rate = self.config.data_rate
         self.rp1_close = self.config.rp1_close
         self.root_dir = Path(self.config.root_dir)
+        self.split = split
 
         self.rgb = []
         self.seg = []
@@ -41,24 +41,32 @@ class KarrDataset(Dataset):
         self.data = None
 
         # meta
-        self.dir_meta = self.root_dir / "meta" # yml
+        self.dir_meta = self.root_dir / split / "meta"
 
         # rgbd directory
-        self.dir_rgb_front = self.root_dir / "camera" / "rgb" # png
-        self.dir_rgb_seg = self.root_dir / "camera" / "seg" / "map" # png
-        self.dir_depth_front = self.root_dir / "camera" / "depth" / "map" # npy
-        self.dir_histo = self.root_dir / "camera" / "histogram" # png
-        self.dir_optflow = self.root_dir / "camera" / "optical_flow" # png
+        self.dir_rgb_front = self.root_dir / split / "camera" / "rgb"
+        self.dir_rgb_seg = self.root_dir / split / "camera" / "seg" / "map"
+        self.dir_depth_front = self.root_dir / split / "camera" / "depth" / "map"
+        self.dir_histo = self.root_dir / split / "camera" / "histogram"
+        self.dir_optflow = self.root_dir / split / "camera" / "optical_flow"
 
         self.files = os.listdir(self.dir_meta)
         self.files.sort()
         self.files = [os.path.splitext(filename)[0] for filename in self.files] # remove extension string
         self.len_files = len(self.files)
 
-        with open(f"{self.root_dir}/2026-02-26_route00_routepoint_list.yml", "r") as f:
+        with open(f"{self.root_dir}/{split}/routepoint_{split}.yml", "r") as f:
             rp_list = yaml.safe_load(f)
             rp_list['route_point']['latitude'].append(rp_list['last_point']['latitude'])
             rp_list['route_point']['longitude'].append(rp_list['last_point']['longitude'])
+
+        # Initialize prev_lat/prev_lon from the frame just before the first "current" frame
+        # so latlon_to_yaw has valid input even on the very first iteration.
+        _first_current_file = self.files[self.seq_len - 2] if self.seq_len >= 2 else self.files[0]
+        with open(f"{self.dir_meta}/{_first_current_file}.yml", "r") as _f:
+            _meta_init = yaml.safe_load(_f)
+        prev_lat = _meta_init["global_position_latlon"][0]
+        prev_lon = _meta_init["global_position_latlon"][1]
 
         # sequences for past and current frames
         for i in range(0, self.len_files - (self.seq_len - 1) - (self.pred_len * self.data_rate)):
@@ -76,7 +84,6 @@ class KarrDataset(Dataset):
                 rgbs.append(f"{self.dir_rgb_front}/{filename}.png")
                 segs.append(f"{self.dir_rgb_seg}/{filename}.png")
                 pcds.append(f"{self.dir_depth_front}/{filename}.npy")
-            print(rgbs)
             self.rgb.append(rgbs)
             self.seg.append(segs)
             self.pcd.append(pcds)
@@ -224,7 +231,7 @@ class KarrDataset(Dataset):
         
 
 if __name__ == "__main__":
-    dataset = KarrDataset()
+    dataset = KarrDataset(split='train')
     dataloader = DataLoader(dataset, batch_size=10, shuffle=False, num_workers=4, drop_last=False)
     iterator = iter(dataloader)
     first_step = next(iter(iterator))
